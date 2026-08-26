@@ -695,75 +695,100 @@ for source in sources:
 # PyDeck 지도
 # ==========================================
 
+# ------------------------------------------
+# 역추적 경로
+# ------------------------------------------
+
 path_layer = pdk.Layer(
     "PathLayer",
     data=path_data,
     get_path="path",
-    get_width=7,
-    get_color=[255, 90, 90],
-    width_min_pixels=5
+    get_color=[255, 70, 70],
+    get_width=8,
+    width_min_pixels=5,
+    pickable=True
 )
 
+
+# ------------------------------------------
+# 측정소
+# ------------------------------------------
 
 station_layer = pdk.Layer(
     "ScatterplotLayer",
     data=station_data,
     get_position="[lon, lat]",
-    get_radius=900,
-    get_fill_color=[30, 130, 255],
+    get_radius=700,
+    get_fill_color=[30, 120, 255],
+    get_line_color=[255, 255, 255],
+    get_line_width=3,
+    radius_min_pixels=9,
+    radius_max_pixels=18,
     pickable=True
 )
 
+
+# ------------------------------------------
+# 발생원 후보
+# ------------------------------------------
 
 source_layer = pdk.Layer(
     "ScatterplotLayer",
     data=source_data,
     get_position="[lon, lat]",
-    get_radius=650,
-    get_fill_color=[255, 80, 80],
+    get_radius=500,
+    get_fill_color=[255, 150, 40],
+    get_line_color=[255, 255, 255],
+    get_line_width=2,
+    radius_min_pixels=7,
+    radius_max_pixels=14,
     pickable=True
 )
 
 
+# ------------------------------------------
+# 지도 중심
+# ------------------------------------------
+
 view_state = pdk.ViewState(
     latitude=station_lat,
     longitude=station_lon,
-    zoom=9.5,
-    pitch=0
+    zoom=10.2,
+    pitch=0,
+    bearing=0
 )
 
+
+# ------------------------------------------
+# 지도 표시
+# ------------------------------------------
 
 deck = pdk.Deck(
     layers=[
         path_layer,
-        station_layer,
-        source_layer
+        source_layer,
+        station_layer
     ],
     initial_view_state=view_state,
+    map_style="dark",
     tooltip={
-        "html":
-        "<b>{name}</b><br/>"
-        "가능성: {score}점",
+        "html": """
+        <b>{name}</b><br/>
+        {type}<br/>
+        {score}%<br/>
+        {distance} km
+        """,
         "style": {
-            "backgroundColor": "#111925",
+            "backgroundColor": "#111827",
             "color": "white"
         }
     }
 )
 
-
 st.pydeck_chart(
     deck,
     use_container_width=True
 )
-
-
-st.caption(
-    "🔵 파란색 = 측정소   "
-    "🔴 빨간색 = 발생원 후보   "
-    "━━ 역추적 예상 경로"
-)
-
 
 # ==========================================
 # 발생원 분석
