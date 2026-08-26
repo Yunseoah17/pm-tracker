@@ -440,9 +440,10 @@ st.sidebar.markdown(
     "## ANALYSIS SETTINGS"
 )
 
-region = st.sidebar.selectbox(
+region = st.selectbox(
     "분석 지역",
-    list(LOCATIONS.keys())
+    list(LOCATIONS.keys()),
+    index=list(LOCATIONS.keys()).index("평택")
 )
 
 station_name = st.sidebar.selectbox(
@@ -686,7 +687,9 @@ for source in sources:
             "lon": source["lon"],
             "lat": source["lat"],
             "name": source["name"],
-            "score": source["score"]
+            "type": source["type"],
+            "score": source["score"],
+            "distance": source["distance"]
         }
     )
 
