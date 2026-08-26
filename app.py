@@ -24,31 +24,33 @@ st.set_page_config(
 LOCATIONS = {
     "평택": {
         "stations": {
-            "평택시 평택역 측정소": (36.9908, 127.0850),
-            "평택시 비전동 측정소": (36.9918, 127.1127),
-            "평택시 고덕동 측정소": (37.0460, 127.0560)
+            "평택 비전동 측정소": (36.9925, 127.1125),
+            "평택 송북동 측정소": (37.0805, 127.0585),
+            "평택 안중 측정소": (36.9865, 126.9275),
+            "평택항 측정소": (36.9585, 126.8435),
         }
     },
 
+    # 기존 서울도 남겨두고 싶으면 사용 가능
     "서울": {
         "stations": {
+            "서울 중구 측정소": (37.5640, 126.9970),
             "서울 강남 측정소": (37.5172, 127.0473),
             "서울 마포 측정소": (37.5663, 126.9014),
-            "서울 종로 측정소": (37.5661, 126.9850)
         }
     },
 
     "인천": {
         "stations": {
-            "인천 남동 측정소": (37.4475, 126.7314),
-            "인천 서구 측정소": (37.4563, 126.7052)
+            "인천 서구 측정소": (37.4563, 126.7052),
+            "인천 남동구 측정소": (37.4475, 126.7314),
         }
     },
 
     "수원": {
         "stations": {
+            "수원 측정소": (37.2636, 127.0286),
             "수원 영통 측정소": (37.2596, 127.0466),
-            "수원 권선 측정소": (37.2636, 127.0286)
         }
     }
 }
@@ -162,44 +164,62 @@ def calculate_backward_path(
     wind_speed,
     hours=5
 ):
+    """
+    측정소에서 바람이 불어온 방향을 따라
+    과거 미세먼지 이동 경로를 계산한다.
+
+    wind_direction:
+        기상학적 풍향
+        0 = 북풍
+        90 = 동풍
+        180 = 남풍
+        270 = 서풍
+    """
 
     points = []
 
+    # 시작점 = 측정소
     current_lat = lat
     current_lon = lon
 
-    points.append(
-        [current_lon, current_lat]
-    )
+    points.append([current_lon, current_lat])
 
-    # 바람이 불어오는 방향을 따라
-    # 과거 발생원을 추정
-    bearing = math.radians(wind_direction)
+    # 시간 간격을 세분화해서 부드러운 경로 생성
+    steps_per_hour = 6
+    total_steps = hours * steps_per_hour
 
-    for h in range(1, hours + 1):
+    # 풍향의 반대 방향 = 공기가 들어온 방향
+    back_bearing = (wind_direction + 180) % 360
 
-        distance = wind_speed * 3.6 * h
+    # 이동속도 km/h
+    speed_kmh = max(float(wind_speed), 0.5) * 3.6
+
+    for step in range(1, total_steps + 1):
+
+        # 10분 단위 이동
+        distance_km = speed_kmh / steps_per_hour
+
+        bearing = math.radians(back_bearing)
 
         delta_lat = (
-            distance * math.cos(bearing)
-        ) / 111
+            distance_km * math.cos(bearing)
+        ) / 111.0
 
         delta_lon = (
-            distance * math.sin(bearing)
+            distance_km * math.sin(bearing)
         ) / (
-            111 *
-            math.cos(math.radians(lat))
+            111.0 * math.cos(math.radians(current_lat))
         )
 
-        new_lat = lat + delta_lat
-        new_lon = lon + delta_lon
+        current_lat += delta_lat
+        current_lon += delta_lon
 
-        points.append(
-            [new_lon, new_lat]
-        )
+        points.append([
+            current_lon,
+            current_lat
+        ])
 
     return points
-
 
 # ==========================================
 # 발생원 후보
@@ -210,31 +230,80 @@ def generate_sources(
     lon,
     wind_direction
 ):
+    """
+    평택 지역의 실제 지리적 특성을 반영한
+    미세먼지 발생원 후보를 생성한다.
+
+    ※ 후보지는 실제 배출원을 확정하는 것이 아니라
+      역추적 결과와 비교하기 위한 가상 후보 지점이다.
+    """
+
+    # -----------------------------------------
+    # 평택 주요 발생원 후보
+    # -----------------------------------------
 
     candidates = [
 
+        # 1. 평택항 / 포승 산업지역
         {
-            "name": "산업시설 A",
+            "name": "평택항·포승 산업지역",
+            "type": "산업·항만 배출",
+            "lat": 36.9635,
+            "lon": 126.8505
+        },
+
+        # 2. 포승국가산업단지 인근
+        {
+            "name": "포승국가산업단지",
             "type": "산업 배출",
-            "lat": lat + 0.08,
-            "lon": lon - 0.05
+            "lat": 36.9805,
+            "lon": 126.8785
         },
 
+        # 3. 경부고속도로 / 평택 도심 교통축
         {
-            "name": "주요도로 B",
+            "name": "경부고속도로 평택 구간",
             "type": "교통 배출",
-            "lat": lat - 0.05,
-            "lon": lon + 0.08
+            "lat": 37.0150,
+            "lon": 127.0950
         },
 
+        # 4. 평택제천고속도로 주변
         {
-            "name": "공사장 C",
-            "type": "비산먼지",
-            "lat": lat + 0.04,
-            "lon": lon + 0.06
-        }
+            "name": "평택제천고속도로",
+            "type": "교통 배출",
+            "lat": 37.0350,
+            "lon": 127.0750
+        },
 
+        # 5. 평택 도심
+        {
+            "name": "평택 도심 교통권",
+            "type": "도시·교통 배출",
+            "lat": 36.9950,
+            "lon": 127.0880
+        },
+
+        # 6. 안중·서부권
+        {
+            "name": "안중·평택 서부권",
+            "type": "도시·비산먼지",
+            "lat": 36.9820,
+            "lon": 126.9270
+        },
+
+        # 7. 산업·물류 지역
+        {
+            "name": "평택 서탄·진위 산업권",
+            "type": "산업·물류 배출",
+            "lat": 37.0850,
+            "lon": 127.0800
+        }
     ]
+
+    # -----------------------------------------
+    # 측정소에서 후보지까지의 방향/거리 계산
+    # -----------------------------------------
 
     for source in candidates:
 
@@ -246,6 +315,11 @@ def generate_sources(
             math.radians(lat)
         )
 
+        distance_km = math.sqrt(
+            (dy * 111) ** 2 +
+            (dx * 111) ** 2
+        )
+
         angle = math.degrees(
             math.atan2(dx, dy)
         )
@@ -253,25 +327,49 @@ def generate_sources(
         if angle < 0:
             angle += 360
 
+        # 풍향과 발생원 방향 비교
         diff = abs(
-            angle - wind_direction
+            ((angle - wind_direction + 180) % 360) - 180
         )
 
-        if diff > 180:
-            diff = 360 - diff
-
-        score = max(
+        # 가까우면서 바람 방향에 가까울수록 높은 점수
+        direction_score = max(
             0,
-            100 - diff * 1.4
+            100 - diff
         )
 
-        source["score"] = round(score)
+        distance_score = max(
+            0,
+            100 - distance_km * 8
+        )
 
-    return sorted(
-        candidates,
+        score = (
+            direction_score * 0.65 +
+            distance_score * 0.35
+        )
+
+        source["distance"] = round(
+            distance_km,
+            1
+        )
+
+        source["score"] = round(
+            score,
+            1
+        )
+
+        source["direction"] = round(
+            angle,
+            1
+        )
+
+    # 점수가 높은 순서
+    candidates.sort(
         key=lambda x: x["score"],
         reverse=True
     )
+
+    return candidates
 
 
 # ==========================================
